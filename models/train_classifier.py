@@ -59,13 +59,13 @@ class AfterVerbTagExtractor(BaseEstimator, TransformerMixin):
         return pd.DataFrame(X_tagged)
 
 def load_data(database_filepath):
-	# load data from database
-	engine = create_engine(f"sqlite:///{database_filepath}")
-	df = pd.read_sql_table(con=engine,table_name="disaster_tweet")
-	X = df['message']
-	Y = df.iloc[:,3:].values
-	category_names = df.iloc[:,3:].columns
-	return X,Y,category_names
+    # load data from database
+    engine = create_engine(f"sqlite:///{database_filepath}")
+    df = pd.read_sql_table(con=engine,table_name="disaster_tweet")
+    X = df['message']
+    Y = df.iloc[:,3:].values
+    category_names = df.iloc[:,3:].columns
+    return X,Y,category_names
 
 
 def tokenize(text):
@@ -87,41 +87,41 @@ def tokenize(text):
 
 
 def build_model():
-	verb_tags = ['VB', 'VBP','VBD','VBG','VBN','VBZ']
-	noun_tags = ['NN', 'NNS','NNP','NNPS']
-	adjective_tags = ['JJ','JJR','JJS']
-	pronoun_tags = ['PRP','PRP']
-	adverb_tags = ['RB','RBR','RBS']
-	
-	pipeline = Pipeline([
-		('features', FeatureUnion([
-			# TFIDF Features
-			('text_pipeline', Pipeline([
-				('vect', CountVectorizer(tokenizer=tokenize,ngram_range=(1,2))),
-				('tfidf', TfidfTransformer())
-			])),
-			('first_tag_after_verb', FeatureUnion([
-				('verb_after_verb', AfterVerbTagExtractor(tags_list=verb_tags)),
-				('noun_after_verb', AfterVerbTagExtractor(tags_list=noun_tags)),
-				('adj_after_verb', AfterVerbTagExtractor(tags_list=adjective_tags)),
-				('pronoun_after_verb', AfterVerbTagExtractor(tags_list=pronoun_tags)),
-				('adverb_after_verb', AfterVerbTagExtractor(tags_list=adverb_tags)),
-			])),
-		])),
-		('classifier', MultiOutputClassifier(RandomForestClassifier(n_estimators=20,min_samples_split=2))),
-	])
-	return pipeline
+    verb_tags = ['VB', 'VBP','VBD','VBG','VBN','VBZ']
+    noun_tags = ['NN', 'NNS','NNP','NNPS']
+    adjective_tags = ['JJ','JJR','JJS']
+    pronoun_tags = ['PRP','PRP']
+    adverb_tags = ['RB','RBR','RBS']
+
+    pipeline = Pipeline([
+        ('features', FeatureUnion([
+            # TFIDF Features
+            ('text_pipeline', Pipeline([
+                ('vect', CountVectorizer(tokenizer=tokenize,ngram_range=(1,2))),
+                ('tfidf', TfidfTransformer())
+            ])),
+            ('first_tag_after_verb', FeatureUnion([
+                ('verb_after_verb', AfterVerbTagExtractor(tags_list=verb_tags)),
+                ('noun_after_verb', AfterVerbTagExtractor(tags_list=noun_tags)),
+                ('adj_after_verb', AfterVerbTagExtractor(tags_list=adjective_tags)),
+                ('pronoun_after_verb', AfterVerbTagExtractor(tags_list=pronoun_tags)),
+                ('adverb_after_verb', AfterVerbTagExtractor(tags_list=adverb_tags)),
+            ])),
+        ])),
+        ('classifier', MultiOutputClassifier(RandomForestClassifier(n_estimators=20,min_samples_split=2))),
+    ])
+    return pipeline
 
 
 def evaluate_model(model, X_test, Y_test, category_names):
-	Y_pred = model.predict(X_test)
-	for i in range(Y_test.shape[1]):
-		print(category_names[i])
-		print(classification_report(Y_test.T[i], Y_pred.T[i]))
+    Y_pred = model.predict(X_test)
+    for i in range(Y_test.shape[1]):
+        print(category_names[i])
+        print(classification_report(Y_test.T[i], Y_pred.T[i]))
 
 
 def save_model(model, model_filepath):
-	joblib.dump(model, model_filepath)
+    joblib.dump(model, model_filepath)
 
 
 def main():
@@ -133,9 +133,15 @@ def main():
         
         print('Building model...')
         model = build_model()
-        
+
         print('Training model...')
-        model.fit(X_train, Y_train)
+        parameters = {
+            'classifier__estimator__n_estimators': [2,5,10,20],
+            'classifier__estimator__min_samples_split': [2,5,10,20,30]
+        }
+        cv = GridSearchCV(model, param_grid=parameters,verbose=3)
+        cv.fit(X_train,Y_train)
+        model = cv.best_estimator_
         
         print('Evaluating model...')
         evaluate_model(model, X_test, Y_test, category_names)
